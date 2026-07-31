@@ -2937,6 +2937,21 @@ def _build_model_sanitizer(config: dict, text_only: bool = False):
                     audio_tower = _AUDIO_SENTINEL
                     embed_audio = _AUDIO_SENTINEL
 
+                    def __getattr__(self, name):
+                        # Some sanitizes use instance helpers or class-level
+                        # tables (e.g. Inkling's ``self._map_llm_layer`` /
+                        # ``self._map_experts`` / ``self._ATTN``) that are pure
+                        # functions of their arguments. Delegate to the real
+                        # Model class (methods bound to this proxy) instead of
+                        # instantiating the full model.
+                        try:
+                            attr = getattr(model_module.Model, name)
+                        except AttributeError:
+                            raise AttributeError(name) from None
+                        if hasattr(attr, "__get__") and callable(attr):
+                            return attr.__get__(self, type(self))
+                        return attr
+
                 proxy = _Proxy()
                 proxy.config = model_config
                 # Nested-VLM sanitizes (e.g. MiniMax-M3 minimax_m3_vl) read
@@ -2957,8 +2972,13 @@ def _build_model_sanitizer(config: dict, text_only: bool = False):
                 else:
                     w = _san(weights)
 
-                w = sanitize_weights(model_module.VisionModel, w, vision_config)
-                w = sanitize_weights(model_module.LanguageModel, w, text_config)
+                # Mirror mlx_vlm.utils.load_model: tower classes are optional
+                # package exports (e.g. inkling defines VisionModel/AudioModel
+                # in submodules without re-exporting them at the package root).
+                if hasattr(model_module, "VisionModel"):
+                    w = sanitize_weights(model_module.VisionModel, w, vision_config)
+                if hasattr(model_module, "LanguageModel"):
+                    w = sanitize_weights(model_module.LanguageModel, w, text_config)
                 return w
 
             logger.info(
