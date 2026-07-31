@@ -1524,6 +1524,33 @@ class VLMBatchedEngine(BaseEngine):
             get_mlx_executor(), _load_vlm_sync
         )
 
+        # Models whose tokenizers expose no eos token string (e.g. Inkling)
+        # come back with tokenizer.eos_token_id = None. The scheduler builds
+        # its stop set from tokenizer attributes, so propagate the model
+        # config's eos there or generation never stops.
+        _tok = getattr(self._processor, "tokenizer", self._processor)
+        if (
+            getattr(_tok, "eos_token_id", None) is None
+            and getattr(_tok, "eos_token_ids", None) is None
+        ):
+            _cfg_eos = getattr(
+                getattr(self._vlm_model, "config", None), "eos_token_id", None
+            )
+            if _cfg_eos is not None:
+                _ids = (
+                    list(_cfg_eos)
+                    if isinstance(_cfg_eos, (list, tuple))
+                    else [int(_cfg_eos)]
+                )
+                # transformers' SpecialTokensMixin.__setattr__ intercepts
+                # token-ish attribute names and tries to set eos_token to a
+                # non-string; bypass it — this is a plain side-channel attr.
+                object.__setattr__(_tok, "eos_token_ids", _ids)
+                logger.info(
+                    "Propagated config eos_token_id %s to tokenizer stop set",
+                    _ids,
+                )
+
         # Materialize lazy buffers (RoPE freqs, vision/audio towers) on the
         # loader thread so per-engine inference threads can read them (#1304).
         from ..utils.model_loading import materialize_lazy_state
