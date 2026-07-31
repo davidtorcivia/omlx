@@ -154,7 +154,12 @@ from .api.responses_utils import (
     format_sse_event,
     normalize_response_output_to_messages,
 )
-from .api.thinking import ThinkingParser, extract_thinking, prompt_opens_thinking
+from .api.thinking import (
+    InklingStreamNormalizer,
+    ThinkingParser,
+    extract_thinking,
+    prompt_opens_thinking,
+)
 from .api.tool_calling import (
     ToolCallStreamFilter,
     build_json_system_prompt,
@@ -166,6 +171,7 @@ from .api.tool_calling import (
     sanitize_tool_call_markup,
 )
 from .api.utils import (
+    SPECIAL_TOKENS_PATTERN,
     clean_special_tokens,
     detect_and_strip_partial,
     extract_multimodal_content,
@@ -4355,6 +4361,7 @@ async def stream_chat_completion(
     except Exception as exc:
         logger.debug("Could not detect chat stream thinking state: %s", exc)
     thinking_parser = ThinkingParser(start_in_thinking=start_in_thinking)
+    inkling_stream_normalizer = InklingStreamNormalizer()
 
     # Reuse the id pre-minted by the caller (so the keepalive frame can share
     # it); otherwise mint one for direct/non-streaming callers.
@@ -4395,7 +4402,13 @@ async def stream_chat_completion(
                 accumulated_text += output.new_text
 
             if stream_content and output.new_text:
-                thinking_delta, content_delta = thinking_parser.feed(output.new_text)
+                thinking_delta, content_delta = thinking_parser.feed(
+                    inkling_stream_normalizer.feed(output.new_text)
+                )
+                if thinking_delta:
+                    thinking_delta = SPECIAL_TOKENS_PATTERN.sub("", thinking_delta)
+                if content_delta:
+                    content_delta = SPECIAL_TOKENS_PATTERN.sub("", content_delta)
 
                 # Emit reasoning_content delta
                 if thinking_delta:
@@ -4760,6 +4773,7 @@ async def stream_anthropic_messages(
     except Exception as exc:
         logger.debug("Could not detect Anthropic stream thinking state: %s", exc)
     thinking_parser = ThinkingParser(start_in_thinking=start_in_thinking)
+    inkling_stream_normalizer = InklingStreamNormalizer()
     thinking_block_started = False
     text_block_started = False
     block_index = 0
@@ -4822,7 +4836,13 @@ async def stream_anthropic_messages(
 
             if output.new_text:
                 accumulated_text += output.new_text
-                thinking_delta, content_delta = thinking_parser.feed(output.new_text)
+                thinking_delta, content_delta = thinking_parser.feed(
+                    inkling_stream_normalizer.feed(output.new_text)
+                )
+                if thinking_delta:
+                    thinking_delta = SPECIAL_TOKENS_PATTERN.sub("", thinking_delta)
+                if content_delta:
+                    content_delta = SPECIAL_TOKENS_PATTERN.sub("", content_delta)
 
                 # Emit thinking content as thinking block
                 if thinking_delta:
@@ -6027,6 +6047,7 @@ async def stream_responses_api(
     accumulated_reasoning = ""
     has_tools = bool(kwargs.get("tools"))
     thinking_parser = ThinkingParser(start_in_thinking=native_reasoning)
+    inkling_stream_normalizer = InklingStreamNormalizer()
     seq = 0
 
     response_id = generate_id(IDPrefix.RESPONSE)
@@ -6266,7 +6287,13 @@ async def stream_responses_api(
                 accumulated_text += output.new_text
 
             if stream_content and output.new_text:
-                thinking_delta, content_delta = thinking_parser.feed(output.new_text)
+                thinking_delta, content_delta = thinking_parser.feed(
+                    inkling_stream_normalizer.feed(output.new_text)
+                )
+                if thinking_delta:
+                    thinking_delta = SPECIAL_TOKENS_PATTERN.sub("", thinking_delta)
+                if content_delta:
+                    content_delta = SPECIAL_TOKENS_PATTERN.sub("", content_delta)
 
                 if thinking_delta:
                     if thinking_filter:

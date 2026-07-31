@@ -556,3 +556,46 @@ class ThinkingBudgetProcessor:
         forced = mx.full(logits.shape, float("-inf"))
         forced[..., target_id] = 0.0
         return forced
+
+
+class InklingStreamNormalizer:
+    """Stateful per-delta normalizer for Inkling thinking markers.
+
+    Maps ``<|content_thinking|>`` to ``<think>`` and the first
+    ``<|end_message|>`` that closes that block to ``</think>`` so the
+    tag-based ThinkingParser can route streamed reasoning. All other text
+    passes through untouched (structural markers are stripped after the
+    parser). Inert for models that never emit the thinking marker.
+    """
+
+    _OPEN = "<|content_thinking|>"
+    _END = "<|end_message|>"
+
+    def __init__(self):
+        self._in_thinking = False
+
+    def feed(self, text: str) -> str:
+        if not text:
+            return text
+        out = []
+        rest = text
+        while rest:
+            if self._in_thinking:
+                idx = rest.find(self._END)
+                if idx < 0:
+                    out.append(rest)
+                    break
+                out.append(rest[:idx])
+                out.append(_CLOSE_TAG)
+                self._in_thinking = False
+                rest = rest[idx + len(self._END):]
+            else:
+                idx = rest.find(self._OPEN)
+                if idx < 0:
+                    out.append(rest)
+                    break
+                out.append(rest[:idx])
+                out.append(_OPEN_TAG)
+                self._in_thinking = True
+                rest = rest[idx + len(self._OPEN):]
+        return "".join(out)

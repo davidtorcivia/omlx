@@ -73,9 +73,33 @@ SPECIAL_TOKENS_PATTERN = re.compile(
     r"<\|end\|>|<\|eot_id\|>|<\|start_header_id\|>|<\|end_header_id\|>|"
     r"<\|image\|>|<\|audio\|>|"  # Gemma 4 VLM special tokens
     r"\[e~\[|\]~b\]|\]~!b\[|\]!p~\[|\]!d~\[|"  # MiniMax M3 special tokens
+    # Inkling message-structure tokens. <|content_thinking|> is NOT listed:
+    # _normalize_inkling_thinking() must see it first to map thinking blocks
+    # to <think> form before the structural markers are stripped.
+    r"<\|message_user\|>|<\|message_model\|>|<\|message_system\|>|"
+    r"<\|message_tool\|>|<\|content_text\|>|<\|end_message\|>|"
+    r"<\|content_model_end_sampling\|>|<\|content_image\|>|"
+    r"<\|content_audio_input\|>|<\|audio_end\|>|"
     r"</s>|<s>|<pad>|\[PAD\]|\[SEP\]|\[CLS\]|"
     r"<eos>|<bos>|<end_of_turn>|<start_of_turn>"  # Gemma special tokens (fixes #1087)
 )
+
+# Inkling thinking blocks: <|content_thinking|>…<|end_message|> (the end marker
+# terminates every message segment, so only the pair directly following a
+# thinking-open is a think block; an unterminated block runs to end-of-text).
+_INKLING_THINKING_PATTERN = re.compile(
+    r"<\|content_thinking\|>(.*?)(?:<\|end_message\|>|\Z)", re.DOTALL
+)
+
+
+def _normalize_inkling_thinking(text: str) -> str:
+    """Map Inkling thinking segments onto the canonical <think> form so
+    extract_thinking() and the streaming parser treat them uniformly."""
+    if "<|content_thinking|>" not in text:
+        return text
+    return _INKLING_THINKING_PATTERN.sub(
+        lambda m: "<think>" + m.group(1) + "</think>", text
+    )
 
 
 def clean_special_tokens(text: str) -> str:
@@ -91,6 +115,7 @@ def clean_special_tokens(text: str) -> str:
     """
     if not text:
         return text
+    text = _normalize_inkling_thinking(text)
     return SPECIAL_TOKENS_PATTERN.sub("", text).strip()
 
 
@@ -98,6 +123,7 @@ def remove_special_tokens_preserve_whitespace(text: str) -> str:
     """Remove special tokens without trimming surrounding whitespace."""
     if not text:
         return text
+    text = _normalize_inkling_thinking(text)
     return SPECIAL_TOKENS_PATTERN.sub("", text)
 
 
@@ -112,6 +138,7 @@ def clean_output_text(text: str) -> str:
     """
     if not text:
         return text
+    text = _normalize_inkling_thinking(text)
     text = SPECIAL_TOKENS_PATTERN.sub("", text)
     from .thinking import extract_thinking
 

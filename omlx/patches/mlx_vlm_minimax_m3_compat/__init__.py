@@ -73,7 +73,11 @@ def _append_package_path(package: Any, path: Path) -> None:
         return
     path_str = str(path)
     if path_str not in package_path:
-        package_path.append(path_str)
+        # PREPEND: newer mlx-vlm pins re-added a native minimax_m3_vl package,
+        # but omlx's MiniMax serving code (sparse-attention patch, msa helpers,
+        # MiniMaxM3KVCache) is built against the vendored implementation. The
+        # vendor must shadow the native package until omlx migrates to it.
+        package_path.insert(0, path_str)
 
 
 def _import_vendor_modules() -> None:

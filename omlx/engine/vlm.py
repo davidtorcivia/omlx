@@ -1551,6 +1551,23 @@ class VLMBatchedEngine(BaseEngine):
                     _ids,
                 )
 
+        # Inkling thinking markers for the streaming ThinkingParser: thinking
+        # is a <|content_thinking|>…<|end_message|> segment. The non-streaming
+        # path normalizes these in api.utils; streaming needs the tokenizer
+        # attrs. (<|end_message|> is generic, but the parser only arms after
+        # think_start, so plain replies are unaffected.)
+        if _read_config_model_type(self._model_name) == "inkling_mm_model":
+            try:
+                _ts = _tok.convert_tokens_to_ids("<|content_thinking|>")
+                _te = _tok.convert_tokens_to_ids("<|end_message|>")
+                if _ts is not None and _te is not None:
+                    object.__setattr__(_tok, "think_start", "<|content_thinking|>")
+                    object.__setattr__(_tok, "think_end", "<|end_message|>")
+                    object.__setattr__(_tok, "think_start_id", int(_ts))
+                    object.__setattr__(_tok, "think_end_id", int(_te))
+            except Exception:
+                logger.debug("Inkling think-marker setup skipped", exc_info=True)
+
         # Materialize lazy buffers (RoPE freqs, vision/audio towers) on the
         # loader thread so per-engine inference threads can read them (#1304).
         from ..utils.model_loading import materialize_lazy_state
