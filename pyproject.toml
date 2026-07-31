@@ -108,12 +108,13 @@ dependencies = [
     "openai-harmony",
     # Cohere Command/Cohere2 output parser for reasoning and tool calls
     "cohere_melody>=0.9.0",
-    # mlx-vlm from davidtorcivia fork branch inkling-small (73e4cb6): upstream
-    # master (post-78b96eb) + open PR Blaizzy/mlx-vlm#1756 (Inkling-Small).
-    # Brings models/inkling (vision+audio+hybrid MoE LM) and the depth-generic
-    # inkling_mtp drafter. MiniMax M3 support is vendored under
-    # omlx.patches.mlx_vlm_minimax_m3_compat because upstream removed it.
-    "mlx-vlm @ git+https://github.com/davidtorcivia/mlx-vlm@73e4cb6878691062fc55c1f969f0eedaa6ca3caf",
+    # mlx-vlm from davidtorcivia fork branch inkling-small (5df1980): upstream
+    # master (post-78b96eb) + open PR Blaizzy/mlx-vlm#1756 (Inkling-Small) +
+    # fork fixes (numpy dMel processor input, depth-8 MTP empty-cache
+    # snapshot/eval-state). Brings models/inkling (vision+audio+hybrid MoE LM)
+    # and the depth-generic inkling_mtp drafter. MiniMax M3 support is vendored
+    # under omlx.patches.mlx_vlm_minimax_m3_compat because upstream removed it.
+    "mlx-vlm @ git+https://github.com/davidtorcivia/mlx-vlm@5df198098a9e73ceab05d35d18af136ae41f7202",
     "Pillow>=9.0.0",
     # dflash-mlx v0.1.10 (9ca0028) - bstnxbt repo. Apple G17 NAX verify,
     # prefix snapshot metrics, CopySpec mode, and full-context draft-layer cache checks.
